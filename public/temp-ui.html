@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Modern Chat App</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/socket.io-client@4/dist/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              border: "hsl(var(--border))",
+              input: "hsl(var(--input))",
+              ring: "hsl(var(--ring))",
+              background: "hsl(var(--background))",
+              foreground: "hsl(var(--foreground))",
+              primary: {
+                DEFAULT: "hsl(var(--primary))",
+                foreground: "hsl(var(--primary-foreground))",
+              },
+              secondary: {
+                DEFAULT: "hsl(var(--secondary))",
+                foreground: "hsl(var(--secondary-foreground))",
+              },
+              destructive: {
+                DEFAULT: "hsl(var(--destructive))",
+                foreground: "hsl(var(--destructive-foreground))",
+              },
+              muted: {
+                DEFAULT: "hsl(var(--muted))",
+                foreground: "hsl(var(--muted-foreground))",
+              },
+              accent: {
+                DEFAULT: "hsl(var(--accent))",
+                foreground: "hsl(var(--accent-foreground))",
+              },
+              popover: {
+                DEFAULT: "hsl(var(--popover))",
+                foreground: "hsl(var(--popover-foreground))",
+              },
+              card: {
+                DEFAULT: "hsl(var(--card))",
+                foreground: "hsl(var(--card-foreground))",
+              },
+            },
+            borderRadius: {
+              lg: "var(--radius)",
+              md: "calc(var(--radius) - 2px)",
+              sm: "calc(var(--radius) - 4px)",
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      
+      :root {
+        --background: 0 0% 100%;
+        --foreground: 222.2 84% 4.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 222.2 84% 4.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222.2 84% 4.9%;
+        --primary: 222.2 47.4% 11.2%;
+        --primary-foreground: 210 40% 98%;
+        --secondary: 210 40% 96%;
+        --secondary-foreground: 222.2 47.4% 11.2%;
+        --muted: 210 40% 96%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --accent: 210 40% 96%;
+        --accent-foreground: 222.2 47.4% 11.2%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 210 40% 98%;
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 222.2 84% 4.9%;
+        --radius: 0.5rem;
+      }
+
+      .dark {
+        --background: 222.2 84% 4.9%;
+        --foreground: 210 40% 98%;
+        --card: 222.2 84% 4.9%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222.2 84% 4.9%;
+        --popover-foreground: 210 40% 98%;
+        --primary: 210 40% 98%;
+        --primary-foreground: 222.2 47.4% 11.2%;
+        --secondary: 217.2 32.6% 17.5%;
+        --secondary-foreground: 210 40% 98%;
+        --muted: 217.2 32.6% 17.5%;
+        --muted-foreground: 215 20.2% 65.1%;
+        --accent: 217.2 32.6% 17.5%;
+        --accent-foreground: 210 40% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 210 40% 98%;
+        --border: 217.2 32.6% 17.5%;
+        --input: 217.2 32.6% 17.5%;
+        --ring: 212.7 26.8% 83.9%;
+      }
+
+      * {
+        background-color: hsl(var(--background));
+        border-color: hsl(var(--border));
+      }
+
+      body {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        font-family: 'Inter', sans-serif;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        border-radius: calc(var(--radius) - 2px);
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: colors 0.2s;
+        cursor: pointer;
+        border: 1px solid transparent;
+        padding: 0.5rem 1rem;
+        height: 2.5rem;
+      }
+
+      .btn:disabled {
+        pointer-events: none;
+        opacity: 0.5;
+      }
+
+      .btn-primary {
+        background-color: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+      }
+
+      .btn-primary:hover {
+        background-color: hsl(var(--primary) / 0.9);
+      }
+
+      .btn-outline {
+        border: 1px solid hsl(var(--border));
+        background-color: hsl(var(--background));
+      }
+
+      .btn-outline:hover {
+        background-color: hsl(var(--accent));
+        color: hsl(var(--accent-foreground));
+      }
+
+      .btn-ghost {
+        background-color: transparent;
+      }
+
+      .btn-ghost:hover {
+        background-color: hsl(var(--accent));
+        color: hsl(var(--accent-foreground));
+      }
+
+      .btn-icon {
+        height: 2.5rem;
+        width: 2.5rem;
+        padding: 0;
+      }
+
+      .btn-lg {
+        height: 2.75rem;
+        padding: 0.5rem 2rem;
+      }
+
+      .card {
+        border-radius: calc(var(--radius) + 2px);
+        border: 1px solid hsl(var(--border));
+        background-color: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+      }
+
+      .input {
+        display: flex;
+        height: 2.5rem;
+        width: 100%;
+        border-radius: calc(var(--radius) - 2px);
+        border: 1px solid hsl(var(--border));
+        background-color: hsl(var(--background));
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        transition: border-color 0.2s;
+      }
+
+      .input:focus {
+        outline: none;
+        border-color: hsl(var(--ring));
+        box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+      }
+
+      .input::placeholder {
+        color: hsl(var(--muted-foreground));
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: calc(var(--radius) - 2px);
+        padding: 0.125rem 0.625rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: colors 0.2s;
+      }
+
+      .badge-default {
+        border: 1px solid transparent;
+        background-color: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+      }
+
+      .badge-destructive {
+        border: 1px solid transparent;
+        background-color: hsl(var(--destructive));
+        color: hsl(var(--destructive-foreground));
+      }
+
+      .scroll-area {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .scroll-viewport {
+        height: 100%;
+        width: 100%;
+        border-radius: inherit;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: hsl(var(--border)) transparent;
+      }
+
+      .scroll-viewport::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .scroll-viewport::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .scroll-viewport::-webkit-scrollbar-thumb {
+        background-color: hsl(var(--border));
+        border-radius: 3px;
+      }
+
+      .separator {
+        height: 1px;
+        width: 100%;
+        background-color: hsl(var(--border));
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // Simple theme hook
+      function useTheme() {
+        const [theme, setTheme] = useState(() => {
+          const saved = localStorage.getItem('theme');
+          return saved || 'system';
+        });
+
+        useEffect(() => {
+          const root = document.documentElement;
+          const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          const effectiveTheme = theme === 'system' ? systemTheme : theme;
+          
+          if (effectiveTheme === 'dark') {
+            root.classList.add('dark');
+          } else {
+            root.classList.remove('dark');
+          }
+          
+          localStorage.setItem('theme', theme);
+        }, [theme]);
+
+        return { theme, setTheme };
+      }
+
+      // Icon components
+      const Moon = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      );
+
+      const Sun = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      );
+
+      const Send = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
+      );
+
+      const Smile = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      );
+
+      const Users = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      );
+
+      const Plus = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+      );
+
+      const Copy = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      );
+
+      const ArrowLeft = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+      );
+
+      const Lock = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      );
+
+      const Globe = ({ className = "h-4 w-4" }) => (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+        </svg>
+      );
+
+      function ChatApp() {
+        const [messages, setMessages] = useState([]);
+        const [inputValue, setInputValue] = useState("");
+        const [usernameValue, setUsernameValue] = useState("");
+        const [roomIdValue, setRoomIdValue] = useState("");
+        const [passkeyValue, setPasskeyValue] = useState("");
+        const [currentRoomId, setCurrentRoomId] = useState("");
+        const [appState, setAppState] = useState("menu");
+        const [isConnected, setIsConnected] = useState(false);
+        const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+        const [mounted, setMounted] = useState(false);
+        const [isPrivateRoom, setIsPrivateRoom] = useState(false);
+        const { theme, setTheme } = useTheme();
+        const socketRef = useRef(null);
+        const messagesEndRef = useRef(null);
+
+        const scrollToBottom = () => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        };
+
+        useEffect(() => {
+          scrollToBottom();
+        }, [messages]);
+
+        useEffect(() => {
+          setMounted(true);
+        }, []);
+
+        useEffect(() => {
+          socketRef.current = io();
+          const socket = socketRef.current;
+
+          socket.on("connect", () => {
+            setIsConnected(true);
+          });
+
+          socket.on("disconnect", () => {
+            setIsConnected(false);
+            setAppState("menu");
+            addMessage("Disconnected from server", "system");
+          });
+
+          socket.on("prompt", (data) => {
+            if (data.includes("Enter room ID")) {
+              setAppState("join-input");
+            } else if (data.includes("Enter username")) {
+              setAppState("join-username");
+            } else if (data.includes("private or public")) {
+              setAppState("host-type");
+            } else if (data.includes("Enter passkey")) {
+              setAppState("host-passkey");
+            }
+          });
+
+          socket.on("message", (data) => {
+            addMessage(data, "system");
+            if (data.includes("Room created") || data.includes("Room ID:")) {
+              const roomMatch = data.match(/Room ID: (\w+)/);
+              if (roomMatch) {
+                setCurrentRoomId(roomMatch[1]);
+                setAppState("host-room");
+              }
+            } else if (data.includes("Connection successful")) {
+              setAppState("chat");
+              addMessage("Welcome to the chat room! Type /quit to leave.", "system");
+            }
+          });
+
+          socket.on("error", (data) => {
+            addMessage(`Error: ${data}`, "system");
+          });
+
+          return () => {
+            socket.disconnect();
+          };
+        }, []);
+
+        const addMessage = (text, type) => {
+          const newMessage = {
+            id: Date.now().toString(),
+            text,
+            type,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, newMessage]);
+        };
+
+        const handleSendMessage = () => {
+          if (!inputValue.trim() || !socketRef.current) return;
+
+          const socket = socketRef.current;
+          addMessage(inputValue, "user");
+
+          if (appState === "chat") {
+            if (inputValue.toLowerCase() === "/quit") {
+              socket.emit("quit");
+              setAppState("menu");
+              setMessages([]);
+            } else {
+              socket.emit("chat_message", inputValue);
+            }
+          }
+
+          setInputValue("");
+        };
+
+        const handleKeyPress = (e) => {
+          if (e.key === "Enter") {
+            handleSendMessage();
+          }
+        };
+
+        const handleHostRoom = () => {
+          if (socketRef.current) {
+            socketRef.current.emit("response", "1");
+            setAppState("host-type");
+          }
+        };
+
+        const handleJoinRoom = () => {
+          if (socketRef.current) {
+            socketRef.current.emit("response", "2");
+            setAppState("join-input");
+          }
+        };
+
+        const handleRoomType = (isPrivate) => {
+          setIsPrivateRoom(isPrivate);
+          if (socketRef.current) {
+            socketRef.current.emit("response", isPrivate ? "1" : "2");
+            if (isPrivate) {
+              setAppState("host-passkey");
+            }
+          }
+        };
+
+        const handlePasskeySubmit = () => {
+          if (!passkeyValue.trim() || !socketRef.current) return;
+          socketRef.current.emit("response", passkeyValue);
+          setPasskeyValue("");
+        };
+
+        const handleRoomIdSubmit = () => {
+          if (!roomIdValue.trim() || !socketRef.current) return;
+          socketRef.current.emit("response", roomIdValue);
+          setRoomIdValue("");
+        };
+
+        const handleUsernameSubmit = () => {
+          if (!usernameValue.trim() || !socketRef.current) return;
+          socketRef.current.emit("response", usernameValue);
+          setUsernameValue("");
+        };
+
+        const copyRoomId = () => {
+          navigator.clipboard.writeText(currentRoomId);
+          addMessage("Room ID copied to clipboard!", "system");
+        };
+
+        const goBack = () => {
+          setAppState("menu");
+          setMessages([]);
+        };
+
+        const handleEmojiSelect = (emoji) => {
+          setInputValue((prev) => prev + emoji);
+          setShowEmojiPicker(false);
+        };
+
+        const toggleTheme = () => {
+          if (theme === "dark") {
+            setTheme("light");
+          } else if (theme === "light") {
+            setTheme("system");
+          } else {
+            setTheme("dark");
+          }
+        };
+
+        const commonEmojis = ["😊", "😂", "❤️", "👍", "👎", "😢", "😮", "😡", "🎉", "🔥"];
+
+        if (!mounted) {
+          return null;
+        }
+
+        return (
+          <div className="min-h-screen bg-background">
+            <div className="container mx-auto max-w-4xl p-4">
+              {/* Header */}
+              <div className="card mb-4">
+                <div className="p-6 pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-xl font-semibold">Modern Chat</h1>
+                      <span className={`badge ${isConnected ? 'badge-default' : 'badge-destructive'}`}>
+                        {isConnected ? "Connected" : "Disconnected"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {appState !== "menu" && appState !== "chat" && (
+                        <button className="btn btn-ghost btn-icon" onClick={goBack}>
+                          <ArrowLeft />
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-ghost btn-icon"
+                        onClick={toggleTheme}
+                        title={`Switch to ${theme === "dark" ? "light" : theme === "light" ? "system" : "dark"} mode`}
+                      >
+                        {theme === "dark" ? <Sun /> : <Moon />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Menu */}
+              {appState === "menu" && (
+                <div className="card mb-4">
+                  <div className="p-8 text-center">
+                    <h2 className="text-2xl font-semibold mb-2">Welcome to Modern Chat</h2>
+                    <p className="text-muted-foreground mb-6">Choose an option to get started</p>
+                    <div className="flex gap-4 justify-center">
+                      <button onClick={handleHostRoom} className="btn btn-primary btn-lg flex items-center gap-2">
+                        <Plus className="h-5 w-5" />
+                        Host Room
+                      </button>
+                      <button
+                        onClick={handleJoinRoom}
+                        className="btn btn-outline btn-lg flex items-center gap-2"
+                      >
+                        <Users className="h-5 w-5" />
+                        Join Room
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Host Room Type Selection */}
+              {appState === "host-type" && (
+                <div className="card mb-4">
+                  <div className="p-8 text-center">
+                    <h2 className="text-xl font-semibold mb-2">Choose Room Type</h2>
+                    <p className="text-muted-foreground mb-6">Select whether your room should be private or public</p>
+                    <div className="flex gap-4 justify-center">
+                      <button onClick={() => handleRoomType(true)} className="btn btn-primary btn-lg flex items-center gap-2">
+                        <Lock className="h-5 w-5" />
+                        Private Room
+                      </button>
+                      <button
+                        onClick={() => handleRoomType(false)}
+                        className="btn btn-outline btn-lg flex items-center gap-2"
+                      >
+                        <Globe className="h-5 w-5" />
+                        Public Room
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Host Passkey Input */}
+              {appState === "host-passkey" && (
+                <div className="card mb-4">
+                  <div className="p-8">
+                    <h2 className="text-xl font-semibold mb-2 text-center">Set Room Passkey</h2>
+                    <p className="text-muted-foreground mb-6 text-center">Enter a passkey to secure your private room</p>
+                    <div className="flex gap-2 max-w-md mx-auto">
+                      <input
+                        className="input flex-1"
+                        value={passkeyValue}
+                        onChange={(e) => setPasskeyValue(e.target.value)}
+                        onKeyPress={(e) => e.key === "Enter" && handlePasskeySubmit()}
+                        placeholder="Enter passkey..."
+                        type="password"
+                      />
+                      <button onClick={handlePasskeySubmit} disabled={!passkeyValue.trim()} className="btn btn-primary">
+                        Create
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Host Room Created */}
+              {appState === "host-room" && (
+                <div className="card mb-4">
+                  <div className="p-8 text-center">
+                    <h2 className="text-xl font-semibold mb-2">Room Created!</h2>
+                    <p className="text-muted-foreground mb-4">Share this Room ID with others to join</p>
+                    <div className="flex items-center gap-2 max-w-md mx-auto mb-6">
+                      <input value={currentRoomId} readOnly className="input text-center font-mono text-lg" />
+                      <button onClick={copyRoomId} className="btn btn-outline btn-icon">
+                        <Copy />
+                      </button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Waiting for users to join...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Join Room Input */}
+              {appState === "join-input" && (
+                <div className="card mb-4">
+                  <div className="p-8">
+                    <h2 className="text-xl font-semibold mb-2 text-center">Join Room</h2>
+                    <p className="text-muted-foreground mb-6 text-center">Enter the Room ID to join</p>
+                    <div className="flex gap-2 max-w-md mx-auto">
+                      <input
+                        className="input flex-1 font-mono"
+                        value={roomIdValue}
+                        onChange={(e) => setRoomIdValue(e.target.value)}
+                        onKeyPress={(e) => e.key === "Enter" && handleRoomIdSubmit()}
+                        placeholder="Enter Room ID..."
+                      />
+                      <button onClick={handleRoomIdSubmit} disabled={!roomIdValue.trim()} className="btn btn-primary">
+                        Join
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Username Input */}
+              {appState === "join-username" && (
+                <div className="card mb-4">
+                  <div className="p-8">
+                    <h2 className="text-xl font-semibold mb-2 text-center">Enter Username</h2>
+                    <p className="text-muted-foreground mb-6 text-center">Choose a username for the chat</p>
+                    <div className="flex gap-2 max-w-md mx-auto">
+                      <input
+                        className="input flex-1"
+                        value={usernameValue}
+                        onChange={(e) => setUsernameValue(e.target.value)}
+                        onKeyPress={(e) => e.key === "Enter" && handleUsernameSubmit()}
+                        placeholder="Enter username..."
+                      />
+                      <button onClick={handleUsernameSubmit} disabled={!usernameValue.trim()} className="btn btn-primary">
+                        Continue
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Messages */}
+              {(appState === "chat" || messages.length > 0) && (
+                <div className="card mb-4">
+                  <div className="p-0">
+                    <div className="scroll-area" style={{ height: '24rem' }}>
+                      <div className="scroll-viewport p-4">
+                        <div className="space-y-3">
+                          {messages.map((message, index) => (
+                            <div key={message.id}>
+                              <div className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+                                <div
+                                  className={`max-w-[80%] rounded-lg px-3 py-2 ${
+                                    message.type === "user"
+                                      ? "bg-primary text-primary-foreground"
+                                      : message.type === "system"
+                                        ? "bg-muted text-muted-foreground"
+                                        : "bg-secondary text-secondary-foreground"
+                                  }`}
+                                >
+                                  <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                                  <p className="text-xs opacity-70 mt-1">{message.timestamp.toLocaleTimeString()}</p>
+                                </div>
+                              </div>
+                              {index < messages.length - 1 && <div className="separator my-2" />}
+                            </div>
+                          ))}
+                          <div ref={messagesEndRef} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Input */}
+              {appState === "chat" && (
+                <div className="card">
+                  <div className="p-4">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          className="input pr-10"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          onKeyPress={handleKeyPress}
+                          placeholder="Type your message... (or /quit to leave)"
+                        />
+                        <button
+                          className="btn btn-ghost btn-icon absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8"
+                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        >
+                          <Smile />
+                        </button>
+                      </div>
+                      <button onClick={handleSendMessage} disabled={!inputValue.trim()} className="btn btn-primary">
+                        <Send />
+                      </button>
+                    </div>
+
+                    {/* Simple Emoji Picker */}
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-16 right-4 bg-popover border rounded-lg p-3 shadow-lg z-10">
+                        <div className="grid grid-cols-5 gap-2">
+                          {commonEmojis.map((emoji) => (
+                            <button
+                              key={emoji}
+                              className="btn btn-ghost h-8 w-8 p-0"
+                              onClick={() => handleEmojiSelect(emoji)}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.render(<ChatApp />, document.getElementById('root'));
+    </script>
+  </body>
+</html>

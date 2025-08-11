@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -6,7 +7,7 @@ const winston = require("winston");
 const { v4: uuidv4 } = require("uuid");
 const os = require("os");
 
-// Configure logging
+// --- Logging setup (keeps what you had) ---
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -16,223 +17,230 @@ const logger = winston.createLogger({
         `${timestamp} - ${level.toUpperCase()} - ${message}`
     )
   ),
-  transports: [
-    new winston.transports.File({
-      filename: "chat_server.log",
-      maxsize: 10 * 1024 * 1024,
-      maxFiles: 5,
-    }),
-    new winston.transports.Console(),
-  ],
+  transports: [new winston.transports.Console()],
 });
 
+// --- App & server ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const rooms = new Map();
-
-app.use(
-  express.static(path.join(__dirname, "public"), {
-    index: false,
-    setHeaders: (res, path, stat) => {
-      logger.info(`Serving static file: ${path}`);
-    },
-  })
-);
+// Serve static public folder (expects public/index.html)
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/", (req, res) => {
-  const filePath = path.join(__dirname, "public", "index.html");
-  logger.info(`Serving index.html for request to / from ${req.ip}`);
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      logger.error(`Error serving index.html: ${err.message}`);
-      res
-        .status(404)
-        .send(
-          "Error: index.html not found. Please ensure the public directory contains index.html."
-        );
-    }
-  });
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
+// In-memory rooms: Map<roomId, { passkey: string|null, clients: Map<socketId, username> }>
+const rooms = new Map();
 
 io.on("connection", (socket) => {
-  logger.info(`New connection from ${socket.id}`);
-  socket.state = { step: "choice" };
-  socket.emit("prompt", "Enter option (1 for host, 2 for connect): ");
+  logger.info(`Socket connected: ${socket.id}`);
 
-  socket.on("response", (data) => {
-    handleResponse(socket, data.trim());
-  });
+  // Send initial connected state
+  socket.emit("state", { step: "connected" });
 
-  socket.on("chat_message", (data) => {
-    console.log(socket.state);
-    console.log(data);
+  // Host a room request: { private: boolean, passkey?: string }
+  socket.on("hostRoom", (payload) => {
+    try {
+      const passkey =
+        payload && payload.private ? payload.passkey || null : null;
+      const roomId = uuidv4();
+      rooms.set(roomId, { passkey, clients: new Map() });
 
-    if (socket.state && socket.state.step === "chat" && data) {
-      const roomId = socket.state.roomId;
-      const username = rooms.get(roomId)?.clients.get(socket.id);
-      if (username && roomId) {
-        io.to(roomId).emit("message", `[${username}] ${data}`);
-        logger.info(`Message from ${username} in room ${roomId}: ${data}`);
-      } else {
-        socket.emit("error", "Not in a valid room or username not set.");
-      }
+      // Put creator in a transient state until they set a username
+      socket.data.roomId = roomId;
+      socket.data.step = "awaiting-username";
+
+      // Structured event: room created
+      socket.emit("roomCreated", {
+        roomId,
+        passkeyRequired: !!passkey,
+        message: "Room created. Please set your username.",
+      });
+
+      logger.info(
+        `Room ${roomId} created (private=${!!passkey}) by ${socket.id}`
+      );
+    } catch (err) {
+      logger.error(`hostRoom error: ${err.message}`);
+      socket.emit("error", { message: "Unable to create room" });
     }
   });
 
+  // Join a room request: { roomId, passkey? }
+  socket.on("joinRoom", (payload) => {
+    try {
+      if (!payload || !payload.roomId) {
+        socket.emit("error", { message: "Missing roomId" });
+        return;
+      }
+      const roomId = payload.roomId;
+      console.log(rooms);
+      
+      const room = rooms.get(roomId);
+      if (!room) {
+        socket.emit("error", { message: "Room does not exist" });
+        return;
+      }
+      if (room.passkey && !payload.passkey) {
+        socket.emit("needPasskey", {
+          roomId,
+          message: "Passkey required to join this room",
+        });
+        return;
+      }
+      if (room.passkey && room.passkey !== payload.passkey) {
+        socket.emit("error", { message: "Invalid passkey" });
+        return;
+      }
+
+      // store on socket that they are joining and need to provide username
+      socket.data.roomId = roomId;
+      socket.data.step = "awaiting-username";
+
+      socket.emit("needUsername", {
+        roomId,
+        message: "Enter username to join",
+      });
+    } catch (err) {
+      logger.error(`joinRoom error: ${err.message}`);
+      socket.emit("error", { message: "Unable to join room" });
+    }
+  });
+
+  // Set username: { username }
+  socket.on("setUsername", (payload) => {
+    try {
+      if (!payload || !payload.username) {
+        socket.emit("error", { message: "Username cannot be empty" });
+        return;
+      }
+      const username = String(payload.username).trim();
+      const roomId = socket.data.roomId;
+      if (!roomId || !rooms.has(roomId)) {
+        socket.emit("error", { message: "Room not found or expired" });
+        return;
+      }
+
+      const room = rooms.get(roomId);
+
+      // Save username and join socket room
+      room.clients.set(socket.id, username);
+      socket.join(roomId);
+      socket.data.step = "chat";
+
+      // Notify everyone in room
+      const joinMsg = {
+        from: "system",
+        text: `*** ${username} joined the chat ***`,
+        timestamp: Date.now(),
+      };
+      io.to(roomId).emit("chatMessage", joinMsg);
+
+      socket.emit("joinedRoom", {
+        roomId,
+        username,
+        message: "Connection successful. Welcome!",
+      });
+
+      logger.info(`Socket ${socket.id} as ${username} joined room ${roomId}`);
+    } catch (err) {
+      logger.error(`setUsername error: ${err.message}`);
+      socket.emit("error", { message: "Unable to set username" });
+    }
+  });
+
+  // Send chat message: { text }
+  socket.on("sendMessage", (payload) => {
+    try {
+      if (!payload || !payload.text) return;
+      const roomId = socket.data.roomId;
+      if (!roomId || !rooms.has(roomId)) {
+        socket.emit("error", { message: "Not in a room" });
+        return;
+      }
+      const room = rooms.get(roomId);
+      const username = room.clients.get(socket.id);
+      if (!username) {
+        socket.emit("error", { message: "Username not set" });
+        return;
+      }
+
+      const msg = {
+        from: username,
+        text: String(payload.text),
+        timestamp: Date.now(),
+      };
+      io.to(roomId).emit("chatMessage", msg);
+      logger.info(`Message from ${username} in ${roomId}: ${payload.text}`);
+    } catch (err) {
+      logger.error(`sendMessage error: ${err.message}`);
+      socket.emit("error", { message: "Unable to send message" });
+    }
+  });
+
+  // Quit event (client leaving intentionally)
   socket.on("quit", () => {
-    const roomId = findRoomForSocket(socket.id);
-    if (roomId) {
-      const room = rooms.get(roomId);
-      const username = room.clients.get(socket.id);
-      if (username) {
-        room.clients.delete(socket.id);
-        logger.info(`Client ${username} quit explicitly from room ${roomId}`);
-        io.to(roomId).emit("message", `*** ${username} left the chat ***`);
-      }
-    }
-    socket.state = { step: "choice" };
-    socket.disconnect(true);
-  });
-
-  socket.on("disconnect", () => {
-    const roomId = findRoomForSocket(socket.id);
-    if (roomId) {
-      const room = rooms.get(roomId);
-      const username = room.clients.get(socket.id);
-      if (username) {
-        room.clients.delete(socket.id);
-        logger.info(`Client ${username} disconnected from room ${roomId}`);
-        io.to(roomId).emit("message", `*** ${username} left the chat ***`);
-        if (room.clients.size === 0) {
-          rooms.delete(roomId);
-          logger.info(`Room ${roomId} deleted (no clients remaining)`);
+    try {
+      const roomId = socket.data.roomId;
+      if (roomId && rooms.has(roomId)) {
+        const room = rooms.get(roomId);
+        const username = room.clients.get(socket.id);
+        if (username) {
+          room.clients.delete(socket.id);
+          io.to(roomId).emit("chatMessage", {
+            from: "system",
+            text: `*** ${username} left the chat ***`,
+            timestamp: Date.now(),
+          });
+          logger.info(`${username} quit room ${roomId}`);
+          if (room.clients.size === 0) {
+            rooms.delete(roomId);
+            logger.info(`Room ${roomId} deleted (empty)`);
+          }
         }
       }
+      socket.leave(socket.data.roomId || "");
+      socket.data.step = "disconnected";
+      socket.disconnect(true);
+    } catch (err) {
+      logger.error(`quit error: ${err.message}`);
     }
-    logger.info(`Closed connection for ${socket.id}`);
+  });
+
+  socket.on("disconnect", (reason) => {
+    // Clean up membership
+    try {
+      const roomId = socket.data.roomId;
+      if (roomId && rooms.has(roomId)) {
+        const room = rooms.get(roomId);
+        const username = room.clients.get(socket.id);
+        if (username) {
+          room.clients.delete(socket.id);
+          io.to(roomId).emit("chatMessage", {
+            from: "system",
+            text: `*** ${username} left the chat ***`,
+            timestamp: Date.now(),
+          });
+          logger.info(
+            `${username} disconnected from ${roomId} (reason: ${reason})`
+          );
+          if (room.clients.size === 0) {
+            rooms.delete(roomId);
+            logger.info(`Room ${roomId} deleted (empty)`);
+          }
+        }
+      }
+      logger.info(`Socket disconnected: ${socket.id} (reason: ${reason})`);
+    } catch (err) {
+      logger.error(`disconnect cleanup error: ${err.message}`);
+    }
   });
 });
 
-function handleResponse(socket, data) {
-  const state = socket.state || { step: "choice" };
-  logger.info(`Handling response from ${socket.id} in state ${state.step}: ${data}`);
-
-  if (state.step === "choice") {
-    if (data === "1") {
-      state.step = "host_type";
-      socket.emit("prompt", "Make room [1] open or [2] private: ");
-    } else if (data === "2") {
-      state.step = "connect_room";
-      socket.emit("prompt", "Enter room ID: ");
-    } else {
-      socket.emit("error", "Invalid option. Choose 1 or 2.");
-      socket.emit("prompt", "Enter option (1 for host, 2 for connect): ");
-    }
-  } else if (state.step === "host_type") {
-    if (data === "1") {
-      const res = createRoom(socket, null);
-      socket.state = res.state;
-      socket.roomId = res.roomId;
-      socket.emit("prompt", "Enter your username: ");
-    } else if (data === "2") {
-      state.step = "host_passkey";
-      socket.emit("prompt", "Set a passkey: ");
-    } else {
-      socket.emit("error", "Invalid option. Choose 1 or 2.");
-      socket.emit("prompt", "Make room [1] open or [2] private: ");
-    }
-  } else if (state.step === "host_passkey") {
-    if (!data) {
-      socket.emit("error", "Passkey cannot be empty.");
-      socket.emit("prompt", "Set a passkey: ");
-    } else {
-      const res = createRoom(socket, data);
-      socket.state = res.state;
-      socket.roomId = res.roomId;
-      socket.emit("prompt", "Enter your username: ");
-    }
-  } else if (state.step === "connect_room") {
-    if (!rooms.has(data)) {
-      socket.emit("error", "Room does not exist.");
-      socket.emit("prompt", "Enter room ID: ");
-    } else {
-      state.roomId = data;
-      const room = rooms.get(data);
-      if (room.passkey) {
-        state.step = "connect_passkey";
-        socket.emit("prompt", "Enter passkey: ");
-      } else {
-        state.step = "username";
-        socket.emit("prompt", "Enter your username: ");
-      }
-    }
-  } else if (state.step === "connect_passkey") {
-    const room = rooms.get(state.roomId);
-    if (!room || data !== room.passkey) {
-      socket.emit("error", "Invalid passkey.");
-      socket.emit("prompt", "Enter passkey: ");
-    } else {
-      state.step = "username";
-      socket.emit("prompt", "Enter your username: ");
-    }
-  } else if (state.step === "username") {
-    if (!data) {
-      socket.emit("error", "Username cannot be empty.");
-      socket.emit("prompt", "Enter your username: ");
-    } else {
-      joinRoom(socket, state.roomId, data);
-      state.step = "chat";
-      socket.emit("message", "type and hit enter to send a message");
-    }
-  } else {
-    socket.emit("error", "Invalid state. Please reconnect.");
-    socket.state = { step: "choice" };
-    socket.emit("prompt", "Enter option (1 for host, 2 for connect): ");
-  }
-  socket.state = state;
-}
-
-function createRoom(socket, passkey) {
-  const roomId = uuidv4();
-  rooms.set(roomId, { passkey, clients: new Map() });
-  socket.state = { step: "username", roomId };
-  socket.emit(
-    "message",
-    `Room created with ID: ${roomId}\nShare this ID with others to join${
-      passkey ? " (passkey required)" : ""
-    }.`
-  );
-  logger.info(`Room ${roomId} created${passkey ? " with passkey" : " (open)"}`);
-  return { step: "username", roomId };
-}
-
-function joinRoom(socket, roomId, username) {
-  const room = rooms.get(roomId);
-  if (!room) {
-    socket.emit("error", "Room no longer exists.");
-    socket.state = { step: "choice" };
-    socket.emit("prompt", "Enter option (1 for host, 2 for connect): ");
-    return;
-  }
-  room.clients.set(socket.id, username);
-  socket.join(roomId);
-  socket.state = { step: "chat", roomId };
-  io.to(roomId).emit("message", `*** ${username} joined the chat ***`);
-  socket.emit("message", "Connection successful. Welcome to the chat!");
-  logger.info(`Client ${username} joined room ${roomId}`);
-}
-
-function findRoomForSocket(socketId) {
-  for (const [roomId, room] of rooms) {
-    if (room.clients.has(socketId)) {
-      return roomId;
-    }
-  }
-  return null;
-}
-
+// Utility to get local IP for logging
 function getServerIp() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
@@ -245,7 +253,7 @@ function getServerIp() {
   return "localhost";
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   const ip = getServerIp();
   logger.info(`Server listening on http://${ip}:${PORT}`);
@@ -254,7 +262,11 @@ server.listen(PORT, () => {
 process.on("SIGINT", () => {
   logger.info("Shutting down server...");
   for (const roomId of rooms.keys()) {
-    io.to(roomId).emit("message", "*** Server is shutting down ***");
+    io.to(roomId).emit("chatMessage", {
+      from: "system",
+      text: "*** Server is shutting down ***",
+      timestamp: Date.now(),
+    });
   }
   io.close(() => {
     logger.info("Server closed");
