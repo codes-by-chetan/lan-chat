@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal Chat</title>
+  <style>
+    body {
+      background: #000;
+      color: #0f0;
+      font-family: 'Courier New', monospace;
+      margin: 20px;
+    }
+    pre {
+      white-space: pre-wrap;
+    }
+    input {
+      background: #000;
+      color: #0f0;
+      border: 1px solid #0f0;
+      font-family: 'Courier New', monospace;
+      width: calc(100% - 30px);
+      margin-right: 5px;
+    }
+    #emoji-toggle {
+      background: #000;
+      color: #0f0;
+      border: 1px solid #0f0;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      width: 25px;
+    }
+    emoji-picker {
+      --background: #000;
+      --input-background-color: #000;
+      --input-border-color: #0f0;
+      --input-font-color: #0f0;
+      --category-emoji-padding: 0px 5px;
+      --category-font-color: #0f0;
+      --indicator-color: #0f0;
+      position: absolute;
+      display: none;
+      z-index: 10;
+    }
+    emoji-picker[open] {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <pre id="output">Welcome to Terminal Chat
+Choose an option: [1] Host a room, [2] Connect to a room
+</pre>
+  <div>
+    <input id="input" autofocus>
+    <button id="emoji-toggle">😊</button>
+  </div>
+  <emoji-picker></emoji-picker>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.22.1/index.min.js" integrity="sha256-/b4rM3a+4rMcT2pTV3g2v9wH9L4T3bE0v3vZJoW4oZc=" crossorigin="anonymous"></script>
+  <script>
+    const socket = io();
+    const output = document.getElementById('output');
+    const input = document.getElementById('input');
+    const emojiToggle = document.getElementById('emoji-toggle');
+    const emojiPicker = document.querySelector('emoji-picker');
+    let state = 'choice';
+
+    function appendOutput(text) {
+      output.textContent += text;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const value = input.value.trim();
+        input.value = '';
+        if (value) {
+          if (state === 'chat') {
+            if (value.toLowerCase() === '/quit') {
+              socket.emit('quit');
+              appendOutput('> /quit\n');
+            } else {
+              socket.emit('chat_message', value);
+              appendOutput('> ' + value + '\n');
+            }
+          } else {
+            socket.emit('response', value);
+            appendOutput('> ' + value + '\n');
+          }
+        }
+      }
+    });
+
+    emojiToggle.addEventListener('click', () => {
+      if (emojiPicker.style.display === 'none') {
+        emojiPicker.style.display = 'block';
+        emojiPicker.setAttribute('open', '');
+        input.focus();
+      } else {
+        emojiPicker.style.display = 'none';
+        emojiPicker.removeAttribute('open');
+      }
+    });
+
+    emojiPicker.addEventListener('emoji-click', (event) => {
+      input.value += event.detail.unicode;
+      input.focus();
+      emojiPicker.style.display = 'none';
+      emojiPicker.removeAttribute('open');
+    });
+
+    socket.on('prompt', (data) => {
+      appendOutput(data);
+    });
+
+    socket.on('message', (data) => {
+      appendOutput(data + '\n');
+      if (data.includes('Connection successful')) {
+        state = 'chat';
+      }
+    });
+
+    socket.on('error', (data) => {
+      appendOutput('Error: ' + data + '\n');
+    });
+
+    socket.on('disconnect', () => {
+      appendOutput('Disconnected from server.\n');
+      state = 'choice';
+      socket.emit('prompt', 'Enter option (1 for host, 2 for connect): ');
+    });
+  </script>
+</body>
+</html>
