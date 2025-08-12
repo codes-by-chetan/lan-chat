@@ -1,12 +1,12 @@
 // server.js
 const express = require("express");
-const http = require("http");
+const https = require("https");
 const path = require("path");
 const { Server } = require("socket.io");
 const winston = require("winston");
 const { v4: uuidv4 } = require("uuid");
 const os = require("os");
-
+const fs = require("fs");
 // --- Logging setup (keeps what you had) ---
 const logger = winston.createLogger({
   level: "info",
@@ -22,7 +22,11 @@ const logger = winston.createLogger({
 
 // --- App & server ---
 const app = express();
-const server = http.createServer(app);
+const options = {
+  key: fs.readFileSync(path.join(__dirname, "192.168.0.39+1-key.pem")),
+  cert: fs.readFileSync(path.join(__dirname, "192.168.0.39+1.pem")),
+};
+const server = https.createServer(options, app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 // Serve static public folder (expects public/index.html)
@@ -78,7 +82,7 @@ io.on("connection", (socket) => {
       }
       const roomId = payload.roomId;
       console.log(rooms);
-      
+
       const room = rooms.get(roomId);
       if (!room) {
         socket.emit("error", { message: "Room does not exist" });
@@ -117,14 +121,29 @@ io.on("connection", (socket) => {
         socket.emit("error", { message: "Username cannot be empty" });
         return;
       }
+
       const username = String(payload.username).trim();
       const roomId = socket.data.roomId;
+
       if (!roomId || !rooms.has(roomId)) {
         socket.emit("error", { message: "Room not found or expired" });
         return;
       }
 
       const room = rooms.get(roomId);
+
+      // Check for duplicate username in the same room (case-insensitive)
+      const isDuplicate = Array.from(room.clients.values()).some(
+        (name) => name.toLowerCase() === username.toLowerCase()
+      );
+
+      if (isDuplicate) {
+        socket.emit("needUsername", {
+          roomId,
+          message: "Username already in use, choose a different one",
+        });
+        return;
+      }
 
       // Save username and join socket room
       room.clients.set(socket.id, username);
@@ -256,7 +275,7 @@ function getServerIp() {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   const ip = getServerIp();
-  logger.info(`Server listening on http://${ip}:${PORT}`);
+  logger.info(`Server listening on https://${ip}:${PORT}`);
 });
 
 process.on("SIGINT", () => {

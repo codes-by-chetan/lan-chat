@@ -3,13 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Modern Chat (structured socket events)</title>
+    <title>TempChat</title>
 
     React (UMD) + Socket.IO client
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/socket.io-client@4/dist/socket.io.js"></script>
+    <script
+      src="https://unpkg.com/react@18/umd/react.development.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://unpkg.com/@babel/standalone/babel.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://unpkg.com/socket.io-client@4/dist/socket.io.js"
+      crossorigin="anonymous"
+    ></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -206,7 +218,7 @@
       .emoji-picker {
         position: absolute;
         bottom: 100%;
-        right: 1rem;
+        left: 1rem;
         margin-bottom: 0.5rem;
         background-color: hsl(var(--background));
         border: 1px solid hsl(var(--border));
@@ -215,6 +227,30 @@
         box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1),
           0 4px 6px -4px rgb(0 0 0 / 0.1);
         z-index: 50;
+      }
+
+      /* Works in WebKit browsers (Chrome, Edge, Safari) */
+      .emoji-picker div::-webkit-scrollbar {
+        width: 6px; /* scrollbar thickness */
+      }
+
+      .emoji-picker div::-webkit-scrollbar-track {
+        background: transparent; /* scrollbar background */
+      }
+
+      .emoji-picker div::-webkit-scrollbar-thumb {
+        background-color: #888; /* scrollbar color */
+        border-radius: 4px;
+      }
+
+      .emoji-picker div::-webkit-scrollbar-thumb:hover {
+        background-color: #555; /* hover effect */
+      }
+
+      /* For Firefox */
+      .emoji-picker div {
+        scrollbar-width: thin;
+        scrollbar-color: #888 transparent;
       }
 
       .dark .emoji-picker {
@@ -257,15 +293,29 @@
     <div id="root"></div>
 
     <script type="text/babel">
-      const { useState, useEffect, useRef } = React;
+      const { useState, useEffect, useRef, useCallback } = React;
+      if ("Notification" in window) {
+        Notification.requestPermission().then((permission) => {
+          if (permission !== "granted") {
+            console.log("Notification permission denied");
+          }
+        });
+      }
 
+      function sendNotification(data) {
+        if (Notification.permission === "granted") {
+          new Notification("New Message", {
+            body: `${data.from} : ` + data.text || "You have a new message!",
+            icon: "/temp-chat-logo.png", // Optional: Add an icon URL
+          });
+        }
+      }
       // Simple theme hook
       function useTheme() {
         const [theme, setTheme] = useState(() => {
           const saved = localStorage.getItem("theme");
           return saved || "system";
         });
-
         useEffect(() => {
           const root = document.documentElement;
           const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
@@ -282,6 +332,20 @@
 
           localStorage.setItem("theme", theme);
         }, [theme]);
+
+        useEffect(() => {
+          const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+          mediaQuery.addEventListener("change", (event) => {
+            const root = document.documentElement;
+            const systemTheme = event.matches ? "dark" : "light";
+
+            if (systemTheme === "dark") {
+              root.classList.add("dark");
+            } else {
+              root.classList.remove("dark");
+            }
+          });
+        }, []);
 
         return { theme, setTheme };
       }
@@ -467,16 +531,229 @@
         const [socket, setSocket] = useState(null);
         const [isConnected, setIsConnected] = useState(false);
         const commonEmojis = [
-          "😊",
+          // 😀 Smileys & Emotion
+          "😀",
+          "😁",
           "😂",
+          "🤣",
+          "😃",
+          "😄",
+          "😅",
+          "😆",
+          "😉",
+          "😊",
+          "😋",
+          "😎",
+          "😍",
+          "😘",
+          "🥰",
+          "😗",
+          "😙",
+          "😚",
+          "🙂",
+          "🤗",
+          "🤩",
+          "🤔",
+          "🤨",
+          "😐",
+          "😑",
+          "🙄",
+          "😏",
+          "😣",
+          "😥",
+          "😮",
+          "🤐",
+          "😯",
+          "😪",
+          "😫",
+          "🥱",
+          "😴",
+          "😌",
+          "😛",
+          "😜",
+          "🤪",
+          "😝",
+          "🤑",
+          "🤠",
+          "😈",
+          "👿",
+          "💀",
+          "☠️",
+          "🤡",
+          "💩",
+          "😺",
+          "😸",
+          "😹",
+          "😻",
+          "😼",
+          "😽",
+          "🙀",
+          "😿",
+          "😾",
+
+          // ❤️ Hearts & Love
           "❤️",
+          "🧡",
+          "💛",
+          "💚",
+          "💙",
+          "💜",
+          "🖤",
+          "🤍",
+          "🤎",
+          "💔",
+          "❣️",
+          "💕",
+          "💞",
+          "💓",
+          "💗",
+          "💖",
+          "💘",
+          "💝",
+          "💟",
+
+          // 👍 Gestures
           "👍",
           "👎",
-          "😢",
-          "😮",
-          "😡",
-          "🎉",
-          "🔥",
+          "👌",
+          "✌️",
+          "🤞",
+          "🤟",
+          "🤘",
+          "🤙",
+          "👊",
+          "✊",
+          "👏",
+          "🙌",
+          "👐",
+          "🤲",
+          "🤝",
+
+          // 🙋 People & Activities
+          "🙋",
+          "🙆",
+          "🙅",
+          "💁",
+          "🙇",
+          "🤷",
+          "🤦",
+          "👋",
+          "🤚",
+          "🖐️",
+          "✋",
+          "🖖",
+          "🙏",
+          "🚶",
+          "🏃",
+          "💃",
+          "🕺",
+          "🛌",
+          "🧘",
+          "🏋️",
+          "🤸",
+          "🏄",
+          "🏊",
+          "🚴",
+          "🚵",
+
+          // 🌍 Nature & Animals
+          "🐶",
+          "🐱",
+          "🐭",
+          "🐹",
+          "🐰",
+          "🦊",
+          "🐻",
+          "🐼",
+          "🐨",
+          "🐯",
+          "🦁",
+          "🐮",
+          "🐷",
+          "🐸",
+          "🐵",
+          "🙈",
+          "🙉",
+          "🙊",
+          "🐒",
+          "🐔",
+          "🐧",
+          "🐦",
+          "🐤",
+          "🐣",
+          "🦆",
+          "🦅",
+          "🦉",
+          "🦇",
+          "🐺",
+          "🐗",
+          "🐴",
+          "🦄",
+          "🐝",
+          "🐛",
+          "🦋",
+          "🐌",
+          "🐞",
+          "🐜",
+          "🪲",
+          "🐢",
+          "🐍",
+          "🦎",
+          "🦖",
+          "🦕",
+          "🐙",
+          "🦑",
+          "🦐",
+          "🦞",
+          "🦀",
+          "🐡",
+          "🐠",
+          "🐟",
+          "🐬",
+          "🐳",
+          "🐋",
+          "🦈",
+          "🐊",
+          "🐅",
+          "🐆",
+          "🦓",
+          "🦍",
+          "🦧",
+          "🦣",
+          "🐘",
+          "🦛",
+          "🦏",
+          "🐪",
+          "🐫",
+          "🦒",
+          "🦘",
+          "🐃",
+          "🐂",
+          "🐄",
+          "🐎",
+          "🐖",
+          "🐏",
+          "🐑",
+          "🦙",
+          "🐐",
+          "🦌",
+          "🐕",
+          "🐩",
+          "🐈",
+          "🐓",
+          "🦃",
+          "🦤",
+          "🦚",
+          "🦜",
+          "🦢",
+          "🕊️",
+          "🦩",
+          "🦦",
+          "🦥",
+          "🐁",
+          "🐀",
+          "🐿️",
+          "🦔",
         ];
 
         // UI state
@@ -493,7 +770,39 @@
         const [inputValue, setInputValue] = useState("");
         const messagesEndRef = useRef(null);
         const chatInputRef = useRef(null);
+        const usernameRef = useRef(currentUsername);
+        const emojiPickerRef = useRef(null);
+        const hostPasskeyRef = useRef(null);
+        const roomIdInputRef = useRef(null);
+        const joinPasskeyInputRef = useRef(null);
+        const usernameInputRef = useRef(null);
 
+        useEffect(() => {
+          function handleClickOutside(event) {
+            if (
+              emojiPickerRef.current &&
+              !emojiPickerRef.current.contains(event.target)
+            ) {
+              setShowEmojiPicker(false);
+            }
+          }
+
+          if (showEmojiPicker) {
+            document.addEventListener("mousedown", handleClickOutside);
+          } else {
+            document.removeEventListener("mousedown", handleClickOutside);
+          }
+
+          return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+          };
+        }, [showEmojiPicker]);
+
+        useEffect(() => {
+          usernameRef.current = currentUsername;
+          console.log("username changed : ", currentUsername);
+          return;
+        }, [currentUsername]);
         useEffect(() => {
           // connect to same origin - ORIGINAL SOCKET.IO LOGIC RESTORED
           const sock = io();
@@ -528,13 +837,21 @@
           sock.on("joinedRoom", (data) => {
             // data: { roomId, username, message }
             setCurrentRoomId(data.roomId);
+            setCurrrentUsername(data.username);
             setAppState("chat");
+            console.log("joined user : ", data.username);
             addSystemMessage(data.message || "You joined the room");
           });
 
           sock.on("chatMessage", (msg) => {
             // msg: { from, text, timestamp }
-            addMessage(msg);
+            if (msg.from) {
+              msg["from"] = msg.from === usernameRef.current ? "You" : msg.from;
+            }
+            setMessages((prev) => [
+              ...prev,
+              { id: Date.now() + Math.random(), ...msg },
+            ]);
           });
 
           sock.on("needPasskey", (data) => {
@@ -565,17 +882,76 @@
 
         useEffect(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          console.log("current user in messages", currentUsername);
+          if (messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            let sanitizedMessage;
+            try {
+              sanitizedMessage = JSON.parse(JSON.stringify(lastMessage)); // Throws on circular
+            } catch (e) {
+              console.error("Cannot send due to data structure issues:", e);
+              return;
+            }
+            if (
+              sanitizedMessage.from != "You" &&
+              sanitizedMessage.from != "system"
+            ) {
+              console.log("sent notification from:", lastMessage.from);
+              sendNotification(sanitizedMessage);
+            }
+          }
+          return;
         }, [messages]);
+
+        useEffect(() => {
+          // This runs every time appState changes
+          console.log("App state changed to:", appState);
+
+          // You can perform your operation here based on the current appState
+          switch (appState) {
+            case "chat":
+              chatInputRef.current?.focus();
+              break;
+            case "menu":
+              // do something when appState is "menu"
+              break;
+            case "host-type":
+              // do something when appState is "host-type"
+              break;
+            case "host-passkey":
+              hostPasskeyRef.current?.focus();
+              break;
+            case "host-room":
+              // do something when appState is "host-type"
+              break;
+            case "join-input":
+              roomIdInputRef.current?.focus();
+              break;
+            case "join-passkey":
+              joinPasskeyInputRef.current?.focus();
+              break;
+            case "username":
+              usernameInputRef.current?.focus();
+              break;
+            // handle other cases similarly...
+            default:
+              // default case if needed
+              break;
+
+              return;
+          }
+        }, [appState]);
 
         const addMessage = (msg) => {
           if (msg.from) {
             msg["from"] =
-              msg.from.trim() === currentUsername.trim() ? "You" : msg.from;
+              msg.from.trim() === usernameRef.current.trim() ? "You" : msg.from;
           }
 
           console.log(msg);
-          console.log("username: ", currentUsername);
+          console.log("username: ", usernameRef.current.trim());
           console.log("msg from: ", msg.from);
+
           setMessages((prev) => [
             ...prev,
             { id: Date.now() + Math.random(), ...msg },
@@ -585,6 +961,7 @@
         const handleEmojiSelect = (emoji) => {
           setInputValue((prev) => prev + emoji);
           setShowEmojiPicker(false);
+          chatInputRef.current?.focus();
         };
 
         const addSystemMessage = (text) => {
@@ -626,15 +1003,15 @@
         };
 
         const getThemeIcon = () => {
-          if (theme === "dark") return <Sun />;
-          if (theme === "light") return <Monitor />;
-          return <Moon />;
+          if (theme === "dark") return <Moon />;
+          if (theme === "light") return <Sun />;
+          return <Monitor />;
         };
 
-        const submitRoomJoin = () => {
-          if (!socket || !roomIdInput.trim()) return;
+        const submitRoomJoin = (roomId) => {
+          if (!socket || !roomId) return;
           socket.emit("joinRoom", {
-            roomId: roomIdInput.trim(),
+            roomId: roomId,
             passkey: passkey || null,
           });
           // keep passkey value only if used; the server will ask for username next
@@ -643,7 +1020,6 @@
 
         const submitUsername = () => {
           if (!socket || !usernameInput.trim()) return;
-          setCurrrentUsername(usernameInput.trim());
           socket.emit("setUsername", { username: usernameInput.trim() });
           setUsernameInput("");
         };
@@ -665,11 +1041,34 @@
 
         const copyRoomId = async () => {
           if (!currentRoomId) return;
-          try {
-            await navigator.clipboard.writeText(currentRoomId);
-            addSystemMessage("Room ID copied to clipboard!");
-          } catch {
-            addSystemMessage("Unable to copy to clipboard");
+
+          if (navigator?.clipboard?.writeText) {
+            try {
+              await navigator.clipboard.writeText(currentRoomId);
+              addSystemMessage("Room ID copied to clipboard!");
+            } catch (e) {
+              console.error(e);
+              addSystemMessage("Unable to copy to clipboard");
+            }
+          } else {
+            // Fallback method using execCommand
+            try {
+              const tempInput = document.createElement("input");
+              tempInput.value = currentRoomId;
+              document.body.appendChild(tempInput);
+              tempInput.select();
+              const successful = document.execCommand("copy");
+              document.body.removeChild(tempInput);
+
+              if (successful) {
+                addSystemMessage("Room ID copied to clipboard!");
+              } else {
+                addSystemMessage("Unable to copy to clipboard");
+              }
+            } catch (e) {
+              console.error(e);
+              addSystemMessage("Unable to copy to clipboard");
+            }
           }
         };
 
@@ -690,16 +1089,12 @@
                   }}
                 >
                   <div>
-                    <h1
-                      style={{
-                        fontSize: "1.25rem",
-                        fontWeight: "600",
-                        margin: "0 0 0.25rem 0",
-                      }}
-                    >
-                      Modern Chat
-                    </h1>
-                    <div className="text-muted text-sm">
+                    <img
+                      src="/temp-chat-logo-cropped.png"
+                      className="h-14"
+                      alt="app logo"
+                    />
+                    <div className="text-muted text-sm pl-5">
                       Structured socket events — no prompt parsing
                     </div>
                   </div>
@@ -835,10 +1230,14 @@
                   </h3>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <input
+                      ref={hostPasskeyRef}
                       className="input"
                       style={{ flex: 1 }}
                       value={passkey}
                       onChange={(e) => setPasskey(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreatePrivate();
+                      }}
                       placeholder="passkey (optional)"
                     />
                     <button
@@ -890,6 +1289,14 @@
                       <Copy />
                     </button>
                   </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      submitRoomJoin(currentRoomId);
+                    }}
+                  >
+                    Join This Room
+                  </button>
                   <div className="text-muted text-sm">
                     Waiting for other users to join — set your username if
                     asked.
@@ -914,15 +1321,22 @@
                   </h3>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <input
+                      ref={roomIdInputRef}
                       className="input"
                       style={{ flex: 1 }}
                       value={roomIdInput}
                       onChange={(e) => setRoomIdInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter")
+                          submitRoomJoin(roomIdInput.trim());
+                      }}
                       placeholder="Room ID"
                     />
                     <button
                       className="btn btn-primary"
-                      onClick={submitRoomJoin}
+                      onClick={() => {
+                        submitRoomJoin(roomIdInput.trim());
+                      }}
                     >
                       Join
                     </button>
@@ -947,10 +1361,20 @@
                   </h3>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <input
+                      ref={joinPasskeyInputRef}
                       className="input"
                       style={{ flex: 1 }}
                       value={passkey}
                       onChange={(e) => setPasskey(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          socket.emit("joinRoom", {
+                            roomId: currentRoomId,
+                            passkey,
+                          });
+                          setPasskey("");
+                        }
+                      }}
                       placeholder="Passkey"
                       type="password"
                     />
@@ -987,10 +1411,14 @@
                   </h3>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <input
+                      ref={usernameInputRef}
                       className="input"
                       style={{ flex: 1 }}
                       value={usernameInput}
                       onChange={(e) => setUsernameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitUsername();
+                      }}
                       placeholder="Username"
                     />
                     <button
@@ -1064,7 +1492,10 @@
                                 >
                                   {new Date(
                                     message.timestamp
-                                  ).toLocaleTimeString()}
+                                  ).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
                                 </div>
                               </div>
                             </div>
@@ -1091,6 +1522,7 @@
                       <Smile />
                     </button>
                     <input
+                      focus="true"
                       ref={chatInputRef}
                       className="input"
                       style={{ flex: 1 }}
@@ -1111,13 +1543,14 @@
 
                   {/* Emoji Picker */}
                   {showEmojiPicker && (
-                    <div className="emoji-picker">
+                    <div className="emoji-picker" ref={emojiPickerRef}>
                       <div
                         style={{
                           display: "grid",
                           gridTemplateColumns: "repeat(5, 1fr)",
                           gap: "0.5rem",
                         }}
+                        className="max-h-36 overflow-auto"
                       >
                         {commonEmojis.map((emoji) => (
                           <button
